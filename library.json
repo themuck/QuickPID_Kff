@@ -1,0 +1,49 @@
+{
+  "name": "QuickPID_Feedforward",
+  "version": "3.0.2",
+  "description": "Eine schnelle und vielseitige PID-Reglerbibliothek für Arduino, erweitert um eine proportionale Störgrößenaufschaltung (Feedforward Control).",
+  "keywords": "pid, control, controller, regulation, feedforward, disturbance, automation, embedded",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/themuck/QuickPID_Kff.git"
+  },
+  "authors": [
+    {
+      "name": "themuck",
+      "email": "deine.email@example.com",
+      "maintainer": true
+    },
+    {
+      "name": "Dlloydev",
+      "url": "https://github.com/themuck"
+    }
+  ],
+  "license": "LGPL-2.1-or-later",
+  "frameworks": "arduino",
+  "platforms": "*",
+  "headers": "QuickPID_Kff.h",
+  "sentence": "Robuste Arduino PID-Reglerbibliothek mit integrierter Störgrößenaufschaltung (Feedforward).",
+  "paragraph": "Diese Bibliothek erweitert die QuickPID-Bibliothek von Dlloydev um eine direkte proportionale Störgrößenaufschaltung (Feedforward). Sie ermöglicht es, bekannte oder messbare Störungen proaktiv zu kompensieren, um die Regelgüte zu verbessern. Beinhaltet einstellbare Kff-Werte und Richtungssteuerung für den Feedforward-Term. Alle Kernfunktionen der ursprünglichen QuickPID-Bibliothek bleiben erhalten.",
+  "examples": [
+    {
+        "name": "Basic_Feedforward",
+        "base": "examples/Basic_Feedforward",
+        "files": [
+            "Basic_Feedforward.ino"
+        ]
+    }
+    // Füge hier weitere Beispiele hinzu, falls du welche erstellst
+    // z.B. ein Verweis auf die Original-Beispiele, wenn sie noch relevant sind
+    // oder neue, die speziell die Feedforward-Funktion zeigen.
+  ],
+  "export": {
+    "include": [
+        "library.json",
+        "README.md",
+        "LICENSE",
+        "src/*",
+        "examples/*",
+        "keywords.txt" // Falls du eine keywords.txt hast
+    ]
+  }
+}
