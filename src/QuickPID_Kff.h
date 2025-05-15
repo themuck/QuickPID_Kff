@@ -5,114 +5,152 @@
 
 #ifndef QuickPID_Kff_h
 #define QuickPID_Kff_h
-#define LIBRARY_VERSION "3.0.2" // Inkrementiere Version für diese Änderung
+#pragma once
+#include <stdint.h>
 
-#include <Arduino.h>
+
+// Du könntest hier eine eigene Versionsnummer für deine modifizierte Library definieren, z.B.:
+// #define QUICKPID_FF_VERSION "X.Y.Z" (basierend auf der Version des Originals plus deine Erweiterung)
 
 class QuickPID {
 
   public:
 
-    // ################### Enums ###################
-    enum class pMode { // Proportional mode
-      pOnError = 0, pOnMeas = 1
-    };
+    enum class Control : uint8_t {manual, automatic, timer, toggle};  // controller mode
+    enum class Action : uint8_t {direct, reverse};                    // controller action
+    enum class pMode : uint8_t {pOnError, pOnMeas, pOnErrorMeas};     // proportional mode
+    enum class dMode : uint8_t {dOnError, dOnMeas};                   // derivative mode
+    enum class iAwMode : uint8_t {iAwCondition, iAwClamp, iAwOff};    // integral anti-windup mode
 
-    enum class dMode { // Derivative mode
-      dOnError = 0, dOnMeas = 1
-    };
-
-    enum class iAwMode { // Integral anti-windup mode
-      iAwCondition = 0, iAwClamp = 1, iAwOff = 2
-    };
-
-    enum class cMode { // Controller mode
-      manual = 0, automatique = 1, timer = 2
-    };
-
-    enum class cDir { // Controller direction
-      dDirect = 0, dReverse = 1
-    };
-
-    // NEU: Enum für Feedforward-Richtung
-    enum class ffDir { // Feedforward direction
+    // NEU: Enum für Störgrößenaufschaltung (Feedforward)
+    enum class ffDir : uint8_t { // Feedforward direction
       ffDirect = 0,    // Störgröße wird direkt zum Output addiert (mit Kff)
       ffReverse = 1    // Störgröße wird vom Output subtrahiert (mit Kff) - effektiv
     };
 
-    // ############## Constructor ################
-    // ... (Konstruktoren bleiben gleich) ...
+    // commonly used functions ************************************************************************************
+
+    // Default constructor
+    QuickPID();
+
+    // Constructor. Links the PID to Input, Output, Setpoint, initial tuning parameters and control modes.
+    QuickPID(float *Input, float *Output, float *Setpoint, float Kp, float Ki, float Kd,
+             pMode pMode, dMode dMode, iAwMode iAwMode, Action Action);
+
+    // Overload constructor links the PID to Input, Output, Setpoint, tuning parameters and control Action.
+    // Uses defaults for remaining parameters.
+    QuickPID(float *Input, float *Output, float *Setpoint, float Kp, float Ki, float Kd, Action Action);
+
+    // Simplified constructor which uses defaults for remaining parameters.
     QuickPID(float *Input, float *Output, float *Setpoint);
-    QuickPID(float *Input, float *Output, float *Setpoint, float Kp, float Ki, float Kd, pMode pMode, cDir cDir);
-    QuickPID(float *Input, float *Output, float *Setpoint, float Kp, float Ki, float Kd, dMode dMode, cDir cDir);
-    QuickPID(float *Input, float *Output, float *Setpoint, float Kp, float Ki, float Kd, pMode pMode, dMode dMode, iAwMode iAwMode, cDir cDir);
-    QuickPID(float *Input, float *Output, float *Setpoint, float Kp, float Ki, float Kd, float PMin, float PMax, float IMin, float IMax, float DMin, float DMax, pMode pMode, dMode dMode, iAwMode iAwMode, cDir cDir);
-    QuickPID(float *Input, float *Output, float *Setpoint, float Kp, float Ki, float Kd, uint32_t SampleTimeUs, pMode pMode, dMode dMode, iAwMode iAwMode, cDir cDir);
-    ~QuickPID();
 
-    float* myInput;
-    float* myOutput;
-    float* mySetpoint;
+    // Sets PID mode to manual (0), automatic (1), timer (2) or toggle manual/automatic (3).
+    void SetMode(Control Mode);
+    void SetMode(uint8_t Mode);
 
-    void SetTunings(float Kp, float Ki, float Kd);
-    void SetTunings(float Kp, float Ki, float Kd, pMode pMode);
-    void SetTunings(float Kp, float Ki, float Kd, dMode dMode);
-    void SetTunings(float Kp, float Ki, float Kd, pMode pMode, dMode dMode, iAwMode iAwMode);
-    // ... (Andere Getter/Setter bleiben gleich) ...
-    void SetOutputLimits(float min, float max);
-    float GetOutputMin();
-    float GetOutputMax();
-    void UsePOnError(bool POnError);
-    void Reset();
-    void Offset(float bias);
-    float GetBias();
+    // Performs the PID calculation. It should be called every time loop() cycles ON/OFF and calculation frequency
+    // can be set using SetMode and SetSampleTime respectively.
     bool Compute();
 
-    // Erweiterung für Störgrößenaufschaltung
-    void SetFeedforwardTunings(float Kff);
-    void SetFeedforwardInput(float *ffInput);
-    float GetKff();
-    void SetFeedforwardDirection(ffDir direction); // NEU
-    ffDir GetFeedforwardDirection();              // NEU
+    // Sets and clamps the output to a specific range (0-255 by default).
+    void SetOutputLimits(float Min, float Max);
+
+    // available but not commonly used functions ******************************************************************
+
+    // While most users will set the tunings once in the constructor, this function gives the user the option of
+    // changing tunings during runtime for Adaptive control.
+    void SetTunings(float Kp, float Ki, float Kd);
+
+    // Overload for specifying proportional ratio.
+    void SetTunings(float Kp, float Ki, float Kd, pMode pMode, dMode dMode, iAwMode iAwMode);
+
+    // Sets the controller direction or action. Direct means the output will increase when the error is positive.
+    // Reverse means the output will decrease when the error is positive.
+    void SetControllerDirection(Action Action);
+    void SetControllerDirection(uint8_t Direction);
+
+    // Sets the sample time in microseconds with which each PID calculation is performed. Default is 100000 µs.
+    void SetSampleTimeUs(uint32_t NewSampleTimeUs);
+
+    // Sets the computation method for the proportional term, to compute based either on error (default),
+    // on measurement, or the average of both.
+    void SetProportionalMode(pMode pMode);
+    void SetProportionalMode(uint8_t Pmode);
+
+    // Sets the computation method for the derivative term, to compute based either on error or measurement (default).
+    void SetDerivativeMode(dMode dMode);
+    void SetDerivativeMode(uint8_t Dmode);
+
+    // Sets the integral anti-windup mode to one of iAwClamp, which clamps the output after
+    // adding integral and proportional (on measurement) terms, or iAwCondition (default), which
+    // provides some integral correction, prevents deep saturation and reduces overshoot.
+    // Option iAwOff disables anti-windup altogether.
+    void SetAntiWindupMode(iAwMode iAwMode);
+    void SetAntiWindupMode(uint8_t IawMode);
+
+    // sets the output summation value
+    void SetOutputSum(float sum); // Diese Methode wird im Original-Header als public deklariert.
+                                  // In vielen PID-Implementierungen ist der "Sum" oder "Bias" Teil des Outputs.
+                                  // In QuickPID (v4.x.x wie diese hier) dient es als Integral-Akkumulator,
+                                  // aber auch als genereller Offset, der zum Output addiert wird.
+
+    // NEU: Funktionen für Störgrößenaufschaltung (Feedforward)
+    void SetFeedforwardInput(float *ffInput);              // Übergibt Pointer zur Störgrößen-Variable
+    void SetFeedforwardTunings(float Kff);                 // Setzt den Kff-Faktor
+    void SetFeedforwardDirection(ffDir direction);         // Setzt die Wirkrichtung der Aufschaltung
+    float GetKff();                                        // Gibt den Kff-Wert zurück
+    ffDir GetFeedforwardDirection();                       // Gibt die Feedforward-Richtung zurück
+
+
+    void Initialize();        // Ensure a bumpless transfer from manual to automatic mode
+    void Reset();             // Clears pTerm, iTerm, dTerm and outputSum values
+
+    // PID Query functions ****************************************************************************************
+    float GetKp();            // proportional gain
+    float GetKi();            // integral gain
+    float GetKd();            // derivative gain
+    float GetPterm();         // proportional component of output
+    float GetIterm();         // integral component of output
+    float GetDterm();         // derivative component of output
+    float GetOutputSum();     // summation of all pid term components
+    uint8_t GetMode();        // manual (0), automatic (1), timer (2) or toggle manual/automatic (3)
+    uint8_t GetDirection();   // direct (0), reverse (1)
+    uint8_t GetPmode();       // pOnError (0), pOnMeas (1), pOnErrorMeas (2)
+    uint8_t GetDmode();       // dOnError (0), dOnMeas (1)
+    uint8_t GetAwMode();      // iAwCondition (0, iAwClamp (1), iAwOff (2)
+
+    float outputSum;          // Internal integral sum (Public im Original. Dies ist der Akkumulator für den I-Term und auch der Bias/Offset)
 
   private:
 
-    void Initialize();
-    void Controller(cDir cDir);
-    bool CheckPointers();
-    // ... (Andere private Member bleiben gleich) ...
-    float _timerPid;
-    float _bias;
-    bool _mode, _options;
-    pMode _pMode;
-    dMode _dMode;
-    iAwMode _iAwMode;
-    cDir _controllerDirection;
+    float dispKp = 0;   // for defaults and display
+    float dispKi = 0;
+    float dispKd = 0;
+    float pTerm;
+    float iTerm;
+    float dTerm;
 
-    // Erweiterung für Störgrößenaufschaltung
-    float *_feedforwardInput = nullptr;
-    float _Kff = 0;
-    ffDir _feedforwardDirection = ffDir::ffDirect; // NEU: Initialisierung hier
+    float kp;           // (P)roportional Tuning Parameter
+    float ki;           // (I)ntegral Tuning Parameter
+    float kd;           // (D)erivative Tuning Parameter
 
-    // ... (Private Enums pOnError_e etc. bleiben gleich) ...
-    typedef enum {
-      pOnError_e = 0, pOnMeas_e = 1
-    } PMODE;
+    float *myInput;     // Pointers to the Input, Output, and Setpoint variables. This creates a
+    float *myOutput;    // hard link between the variables and the PID, freeing the user from having
+    float *mySetpoint;  // to constantly tell us what these values are. With pointers we'll just know.
 
-    typedef enum {
-      dOnError_e = 0, dOnMeas_e = 1
-    } DMODE;
+    // NEU: Private Member für Störgrößenaufschaltung
+    float *_feedforwardInput = nullptr; // Pointer zur Störgrößen-Variable
+    float _Kff = 0;                     // Störgrößenaufschaltungsfaktor
+    ffDir _feedforwardDirection = ffDir::ffDirect; // Standardmäßig Direct
 
-    typedef enum {
-      iAwCondition_e = 0, iAwClamp_e = 1, iAwOff_e = 2
-    } IAWMODE;
+    Control mode = Control::manual;
+    Action action = Action::direct;
+    pMode pmode = pMode::pOnError;
+    dMode dmode = dMode::dOnMeas;
+    iAwMode iawmode = iAwMode::iAwCondition;
 
-    typedef enum {
-      manual_e = 0, automatique_e = 1, timer_e = 2
-    } CMODE;
+    uint32_t sampleTimeUs, lastTime;
+    float outMin, outMax, error, lastError, lastInput;
 
-    typedef enum {
-      dDirect_e = 0, dReverse_e = 1
-    } CDIR;
-};
-#endif
+}; // class QuickPID
+#endif // QuickPID.h
