@@ -1,16 +1,7 @@
-/*  QuickPID.h - QuickPID Library for Arduino
-    Copyright (c) 2019, 2023 Dlloydev. All right reserved.
-    // ... (Lizenz etc. bleibt gleich) ...
-*/
-
-#ifndef QuickPID_Kff_h
-#define QuickPID_Kff_h
 #pragma once
 #include <stdint.h>
-
-
-// Du könntest hier eine eigene Versionsnummer für deine modifizierte Library definieren, z.B.:
-// #define QUICKPID_FF_VERSION "X.Y.Z" (basierend auf der Version des Originals plus deine Erweiterung)
+#ifndef QuickPID_Kff_h
+#define QuickPID_Kff_h
 
 class QuickPID {
 
@@ -18,30 +9,33 @@ class QuickPID {
 
     enum class Control : uint8_t {manual, automatic, timer, toggle};  // controller mode
     enum class Action : uint8_t {direct, reverse};                    // controller action
+    enum class ffAction : uint8_t {direct, reverse};                   // feed-forward action
     enum class pMode : uint8_t {pOnError, pOnMeas, pOnErrorMeas};     // proportional mode
     enum class dMode : uint8_t {dOnError, dOnMeas};                   // derivative mode
     enum class iAwMode : uint8_t {iAwCondition, iAwClamp, iAwOff};    // integral anti-windup mode
-
-    // NEU: Enum für Störgrößenaufschaltung (Feedforward)
-    enum class ffDir : uint8_t { // Feedforward direction
-      ffDirect = 0,    // Störgröße wird direkt zum Output addiert (mit Kff)
-      ffReverse = 1    // Störgröße wird vom Output subtrahiert (mit Kff) - effektiv
-    };
 
     // commonly used functions ************************************************************************************
 
     // Default constructor
     QuickPID();
 
-    // Constructor. Links the PID to Input, Output, Setpoint, initial tuning parameters and control modes.
-    QuickPID(float *Input, float *Output, float *Setpoint, float Kp, float Ki, float Kd,
-             pMode pMode, dMode dMode, iAwMode iAwMode, Action Action);
+    // Constructor. Links the PID to Input, Output, Setpoint, FeedForward, initial tuning parameters and control modes.
+    QuickPID(float *Input, float *Output, float *Setpoint, float *FeedForward,
+             float Kp, float Ki, float Kd, float Kff,
+             pMode pMode, dMode dMode, iAwMode iAwMode, Action Action, ffAction ffAction);
 
-    // Overload constructor links the PID to Input, Output, Setpoint, tuning parameters and control Action.
-    // Uses defaults for remaining parameters.
-    QuickPID(float *Input, float *Output, float *Setpoint, float Kp, float Ki, float Kd, Action Action);
+    // Overload constructor links the PID to Input, Output, Setpoint, FeedForward, tuning parameters and control Action.
+    // Uses defaults for remaining PID modes.
+    QuickPID(float *Input, float *Output, float *Setpoint, float *FeedForward,
+             float Kp, float Ki, float Kd, float Kff, Action Action, ffAction ffAction);
 
     // Simplified constructor which uses defaults for remaining parameters.
+    QuickPID(float *Input, float *Output, float *Setpoint, float *FeedForward);
+
+    // Original constructors (without feed-forward) for backward compatibility (optional, but good practice)
+    QuickPID(float *Input, float *Output, float *Setpoint, float Kp, float Ki, float Kd,
+             pMode pMode, dMode dMode, iAwMode iAwMode, Action Action);
+    QuickPID(float *Input, float *Output, float *Setpoint, float Kp, float Ki, float Kd, Action Action);
     QuickPID(float *Input, float *Output, float *Setpoint);
 
     // Sets PID mode to manual (0), automatic (1), timer (2) or toggle manual/automatic (3).
@@ -59,15 +53,25 @@ class QuickPID {
 
     // While most users will set the tunings once in the constructor, this function gives the user the option of
     // changing tunings during runtime for Adaptive control.
-    void SetTunings(float Kp, float Ki, float Kd);
+    void SetTunings(float Kp, float Ki, float Kd, float Kff);
+    void SetTunings(float Kp, float Ki, float Kd); // Overload without Kff for backward compatibility or if Kff is set separately
 
     // Overload for specifying proportional ratio.
-    void SetTunings(float Kp, float Ki, float Kd, pMode pMode, dMode dMode, iAwMode iAwMode);
+    void SetTunings(float Kp, float Ki, float Kd, float Kff, pMode pMode, dMode dMode, iAwMode iAwMode);
+    // Overload for specifying proportional ratio.
+    void SetTunings(float Kp, float Ki, float Kd, pMode pMode, dMode dMode, iAwMode iAwMode); // Original
 
     // Sets the controller direction or action. Direct means the output will increase when the error is positive.
     // Reverse means the output will decrease when the error is positive.
     void SetControllerDirection(Action Action);
     void SetControllerDirection(uint8_t Direction);
+
+    // Sets the feed-forward gain Kff.
+    void SetFeedForwardGain(float Kff);
+
+    // Sets the feed-forward controller direction or action.
+    void SetFeedForwardDirection(ffAction Action);
+    void SetFeedForwardDirection(uint8_t Direction);
 
     // Sets the sample time in microseconds with which each PID calculation is performed. Default is 100000 µs.
     void SetSampleTimeUs(uint32_t NewSampleTimeUs);
@@ -89,18 +93,7 @@ class QuickPID {
     void SetAntiWindupMode(uint8_t IawMode);
 
     // sets the output summation value
-    void SetOutputSum(float sum); // Diese Methode wird im Original-Header als public deklariert.
-                                  // In vielen PID-Implementierungen ist der "Sum" oder "Bias" Teil des Outputs.
-                                  // In QuickPID (v4.x.x wie diese hier) dient es als Integral-Akkumulator,
-                                  // aber auch als genereller Offset, der zum Output addiert wird.
-
-    // NEU: Funktionen für Störgrößenaufschaltung (Feedforward)
-    void SetFeedforwardInput(float *ffInput);              // Übergibt Pointer zur Störgrößen-Variable
-    void SetFeedforwardTunings(float Kff);                 // Setzt den Kff-Faktor
-    void SetFeedforwardDirection(ffDir direction);         // Setzt die Wirkrichtung der Aufschaltung
-    float GetKff();                                        // Gibt den Kff-Wert zurück
-    ffDir GetFeedforwardDirection();                       // Gibt die Feedforward-Richtung zurück
-
+    void SetOutputSum(float sum);
 
     void Initialize();        // Ensure a bumpless transfer from manual to automatic mode
     void Reset();             // Clears pTerm, iTerm, dTerm and outputSum values
@@ -109,42 +102,45 @@ class QuickPID {
     float GetKp();            // proportional gain
     float GetKi();            // integral gain
     float GetKd();            // derivative gain
+    float GetKff();           // feed-forward gain
     float GetPterm();         // proportional component of output
     float GetIterm();         // integral component of output
     float GetDterm();         // derivative component of output
+    float GetFFterm();        // feed-forward component of output
     float GetOutputSum();     // summation of all pid term components
     uint8_t GetMode();        // manual (0), automatic (1), timer (2) or toggle manual/automatic (3)
     uint8_t GetDirection();   // direct (0), reverse (1)
+    uint8_t GetFeedForwardDirection(); // direct (0), reverse (1)
     uint8_t GetPmode();       // pOnError (0), pOnMeas (1), pOnErrorMeas (2)
     uint8_t GetDmode();       // dOnError (0), dOnMeas (1)
     uint8_t GetAwMode();      // iAwCondition (0, iAwClamp (1), iAwOff (2)
 
-    float outputSum;          // Internal integral sum (Public im Original. Dies ist der Akkumulator für den I-Term und auch der Bias/Offset)
+    float outputSum;          // Internal integral sum
 
   private:
 
     float dispKp = 0;   // for defaults and display
     float dispKi = 0;
     float dispKd = 0;
+    float dispKff = 0; // for defaults and display feed-forward gain
     float pTerm;
     float iTerm;
     float dTerm;
+    float ffTerm;       // feed-forward component of output
 
     float kp;           // (P)roportional Tuning Parameter
     float ki;           // (I)ntegral Tuning Parameter
     float kd;           // (D)erivative Tuning Parameter
+    float kff;          // (Ff)eed-forward Tuning Parameter
 
     float *myInput;     // Pointers to the Input, Output, and Setpoint variables. This creates a
     float *myOutput;    // hard link between the variables and the PID, freeing the user from having
     float *mySetpoint;  // to constantly tell us what these values are. With pointers we'll just know.
-
-    // NEU: Private Member für Störgrößenaufschaltung
-    float *_feedforwardInput = nullptr; // Pointer zur Störgrößen-Variable
-    float _Kff = 0;                     // Störgrößenaufschaltungsfaktor
-    ffDir _feedforwardDirection = ffDir::ffDirect; // Standardmäßig Direct
+    float *myFeedForward; // Pointer to the FeedForward variable.
 
     Control mode = Control::manual;
     Action action = Action::direct;
+    ffAction ffaction = ffAction::direct; // Default feed-forward action
     pMode pmode = pMode::pOnError;
     dMode dmode = dMode::dOnMeas;
     iAwMode iawmode = iAwMode::iAwCondition;
