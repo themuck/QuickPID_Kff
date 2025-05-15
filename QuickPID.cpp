@@ -8,7 +8,7 @@
 #include "WProgram.h"
 #endif
 
-#include "QuickPID.h"
+#include "QuickPID_Kff.h"
 
 // ... (Alle Konstruktoren bleiben unverändert in ihrer Signatur) ...
 QuickPID::QuickPID(float *Input, float *Output, float *Setpoint) {
