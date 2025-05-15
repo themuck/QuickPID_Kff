@@ -3,8 +3,8 @@
     // ... (Lizenz etc. bleibt gleich) ...
 */
 
-#ifndef QuickPID_h
-#define QuickPID_h
+#ifndef QuickPID_Kff_h
+#define QuickPID_Kff_h
 #define LIBRARY_VERSION "3.0.2" // Inkrementiere Version für diese Änderung
 
 #include <Arduino.h>
