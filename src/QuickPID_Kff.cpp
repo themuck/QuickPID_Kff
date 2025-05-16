@@ -1,5 +1,11 @@
+/*
+ * This library implements a PID controller with a FeedForward (Kff) component.
+ * The FeedForward term is based on [Specify basis, e.g., a simplified model of the system, an expected disturbance, etc.].
+ * Created by [Your Name], [Date]
+ * Version 1.0
+ */
 /**********************************************************************************
-   QuickPID Library + Kff for Arduino - Version 3.1.9
+   QuickPID Library for Arduino - Version 3.1.9
    by dlloydev https://github.com/Dlloydev/QuickPID
    Based on the Arduino PID_v1 Library. Licensed under the MIT License.
  **********************************************************************************/
@@ -123,47 +129,37 @@ bool QuickPID::Compute() {
       }
     }
 
-    //condition anti-windup (default)
+    // Member 'iTerm' was set at L112 as (ki * error) for the current cycle. This is for GetIterm().
+    // Member 'outputSum' is the integral accumulator from the previous cycle.
+    float currentCycleIntegralContribution = iTerm; // Use the value set at L112.
+
+    // Anti-windup logic: Update 'outputSum' (the integral accumulator)
     if (iawmode == iAwMode::iAwCondition) {
       bool aw = false;
-      // Propose output if iTerm is allowed to update
-      float proposedIterm = iTerm + ki * error; // Potential new iTerm before ffTerm
-      float pidOutputWithoutI = (peTerm - pmTerm) + dTerm; // PID output without integral and ff
-      float outputIfITermUpdated = pidOutputWithoutI + proposedIterm + ffTerm;
+      float pAndDTerms = pTerm + dTerm; // pTerm is (peTerm - pmTerm)
+      // Calculate total potential output if integral accumulator (outputSum) is updated
+      float potentialTotalOutput = pAndDTerms + (outputSum + currentCycleIntegralContribution) + ffTerm;
 
-      if (outputIfITermUpdated > outMax && error > 0) aw = true; // Check error sign for windup condition
-      else if (outputIfITermUpdated < outMin && error < 0) aw = true; // Check error sign for windup condition
+      if (potentialTotalOutput > outMax && error > 0) aw = true;
+      else if (potentialTotalOutput < outMin && error < 0) aw = true;
       
-      if (aw && ki != 0) { // If aw is true and ki is not zero
-        // Don't update iTerm, or clamp it if necessary (though simple prevention is often better)
-        // For simplicity here, we prevent iTerm from causing further saturation.
-        // More advanced: iTerm = (action == Action::direct ? outMax : outMin) - pidOutputWithoutI - ffTerm;
-        // For now, we just don't update iTerm if it would push output beyond limits
-      } else {
-         iTerm += ki * error; // Update iTerm if no windup condition
+      if (!aw || ki == 0) { // If no windup or Ki is zero, update accumulator
+        outputSum += currentCycleIntegralContribution;
       }
-    } else { // iAwOff or iAwClamp
-        iTerm += ki * error; // Standard integral accumulation
+      // else: outputSum (integral accumulator) is not updated this cycle due to windup
+    } else { // iAwOff or iAwClamp (accumulation happens first for both)
+        outputSum += currentCycleIntegralContribution;
     }
 
-
-    // PID output calculation
-    // outputSum is effectively the integral sum here.
-    // Let's adjust how outputSum is used or recalculate the output.
-    // The original code had a slightly confusing use of outputSum.
-    // Let's make it clearer:
-    // outputSum represents the accumulated integral term.
-
-    outputSum = iTerm; // Start with the current integral term
-
-    if (iawmode == iAwMode::iAwOff) {
-      // No clamping on integral sum for iAwOff, pmTerm is part of pTerm
-    } else if (iawmode == iAwMode::iAwClamp) {
-      // Clamp the integral sum itself
-      outputSum = constrain(outputSum, outMin - (pTerm + dTerm + ffTerm), outMax - (pTerm + dTerm + ffTerm));
-    } else { // iAwCondition - integral already handled with windup logic
-        // outputSum is iTerm
+    // If iAwClamp mode, clamp the now-updated integral accumulator (outputSum).
+    // This is a separate step after accumulation.
+    if (iawmode == iAwMode::iAwClamp) {
+      float nonIntegralTerms = pTerm + dTerm + ffTerm;
+      outputSum = constrain(outputSum, outMin - nonIntegralTerms, outMax - nonIntegralTerms);
     }
+    // For iAwOff, outputSum is unconstrained by this specific clamping.
+    // For iAwCondition, outputSum was conditionally updated; no further clamping of outputSum itself here.
+    // The final *myOutput will be constrained later.
 
     // Final Output Calculation
     // Original: outputSum += iTerm; then outputSum -= pmTerm; then *myOutput = constrain(outputSum + peTerm + dTerm, outMin, outMax);
@@ -271,54 +267,23 @@ void QuickPID::SetMode(uint8_t Mode) {
   from manual to automatic mode.
 ******************************************************************************/
 void QuickPID::Initialize() {
-  // outputSum here is the integral accumulator.
-  // To achieve bumpless transfer, the integral term (outputSum) should be set
-  // such that the PID output matches the current *myOutput.
-  // *myOutput = pTerm + iTerm + dTerm + ffTerm
-  // iTerm = *myOutput - (pTerm + dTerm + ffTerm)
-  // However, pTerm, dTerm, and ffTerm depend on current inputs/setpoints which might not be stable.
-  // A common approach is to set iTerm = *myOutput and then adjust if other terms are significant.
-  // For simplicity, and as in original, set outputSum (iTerm) to current output,
-  // then constrain. This assumes pTerm and dTerm are small or will quickly adjust.
-  // ffTerm should also be considered if active.
-
   lastInput = *myInput; // Update lastInput for derivative calculation
-  // Calculate initial pTerm, dTerm, ffTerm based on current state if possible
-  // This is complex as error might not be defined yet.
-  // The original Initialize just set outputSum = *myOutput.
-  // Let's refine this slightly.
-  // If we set iTerm = *myOutput, then PID output = pTerm + *myOutput + dTerm + ffTerm, which is wrong.
-  // We want: *myOutput = pTerm_initial + iTerm_initial + dTerm_initial + ffTerm_initial
-  // A simpler bumpless transfer:
-  iTerm = *myOutput; // Assume *myOutput is the desired starting point for the integral.
-                     // If p, d, ff terms are active, this might not be perfect but is common.
-  if (myFeedForward != nullptr && kff != 0) {
-    float currentFF = *myFeedForward;
-    if (ffaction == ffAction::reverse) currentFF = -currentFF;
-    iTerm -= kff * currentFF; // Adjust iTerm to account for existing feedforward
-  }
-  // pTerm and dTerm are harder to pre-calculate for bumpless without knowing the error history.
-  // Often, setting iTerm to *myOutput (or *myOutput - ffTerm) is sufficient.
-  outputSum = iTerm; // outputSum is our integral accumulator
-  outputSum = constrain(outputSum, outMin, outMax); // Constrain the integral sum itself.
-                                                    // This might need to be more nuanced based on other terms.
-                                                    // A better approach for bumpless with all terms:
-                                                    // iTerm = *myOutput - (calculated_pTerm + calculated_dTerm + calculated_ffTerm)
-                                                    // For now, stick to a simpler version close to original:
-  // outputSum = *myOutput; // This was the original line for outputSum
-  // lastInput = *myInput;
-  // outputSum = constrain(outputSum, outMin, outMax);
-  // Let's use the iTerm approach:
+
+  // To achieve bumpless transfer, the integral term (iTerm, which becomes outputSum)
+  // should be set such that the PID output initially matches the current *myOutput.
+  // We initialize iTerm = *myOutput and then subtract the feedforward component,
+  // as pTerm and dTerm will be calculated on the first Compute() call.
   iTerm = *myOutput;
-  if (myFeedForward != nullptr) {
+
+  if (myFeedForward != nullptr && kff != 0) { // Check kff to avoid unnecessary computation
     float ffVal = *myFeedForward;
-    if (ffaction == ffAction::reverse) ffVal = -ffVal;
-    iTerm -= kff * ffVal;
+    if (ffaction == ffAction::reverse) {
+      ffVal = -ffVal;
+    }
+    iTerm -= kff * ffVal; // Adjust iTerm to account for existing feedforward
   }
-  // pTerm and dTerm are based on error, which will be calculated on the first Compute.
-  // So, setting iTerm to *myOutput - ffTerm is a reasonable start.
+
   outputSum = constrain(iTerm, outMin, outMax); // outputSum is the integral accumulator
-  lastInput = *myInput;
 }
 
 /* SetControllerDirection(.)**************************************************

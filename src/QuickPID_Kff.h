@@ -1,3 +1,9 @@
+/*
+ * This library implements a PID controller with a FeedForward (Kff) component.
+ * The FeedForward term is based on [Specify basis, e.g., a simplified model of the system, an expected disturbance, etc.].
+ * Created by [Your Name], [Date]
+ * Version 1.0
+ */
 #pragma once
 #include <stdint.h>
 #ifndef QuickPID_Kff_h
@@ -149,4 +155,4 @@ class QuickPID {
     float outMin, outMax, error, lastError, lastInput;
 
 }; // class QuickPID
-#endif // QuickPID.h
+#endif // QuickPID_Kff_h
